@@ -48,15 +48,20 @@ pipeline {
             }
         }
 
-        stage('Ejecutar Contenedor Node.js') {
+stage('Ejecutar Contenedor Node.js') {
             steps {
                 sh '''
-                    # Detiene y elimina versiones anteriores del contenedor
+                    # Detener versiones anteriores
                     docker stop hola-mundo-node || true
                     docker rm hola-mundo-node || true
                     
-                    # Ejecuta el nuevo contenedor usando el Workspace de Jenkins para los datos
-                    # Esto hace que ya no dependa de /home/daniel/PLATAFORMA_AUTONOMO/
+                    # PASO CRÍTICO: Asegurar que users.json exista como archivo
+                    # Si no existe, lo crea con un array vacío []
+                    if [ ! -f ${WORKSPACE}/users.json ]; then
+                        echo "[]" > ${WORKSPACE}/users.json
+                    fi
+
+                    # Ejecutar contenedor
                     docker run -d --name hola-mundo-node \
                     -p 3000:3000 \
                     -v ${WORKSPACE}/users.json:/usr/src/app/users.json \
