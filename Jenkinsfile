@@ -1,6 +1,8 @@
 pipeline {
     agent any
+    
     environment {
+        // Asegura compatibilidad con la versión de Docker en tu sistema
         DOCKER_API_VERSION = '1.44' 
     }
 
@@ -10,6 +12,20 @@ pipeline {
     }
 
     stages {
+        stage('Limpiar Workspace') {
+            steps {
+                // Borra archivos de construcciones anteriores para evitar conflictos
+                cleanWs() 
+            }
+        }
+
+        stage('Descargar Código') {
+            steps {
+                // Descarga la versión más reciente de tu repositorio
+                git branch: 'main', url: 'https://github.com/josue2403/ISPA.git'
+            }
+        }
+
         stage('Instalar dependencias') {
             steps {
                 sh 'apt-get update && apt-get install -y libatomic1 || true'
@@ -20,33 +36,33 @@ pipeline {
         stage('Ejecutar tests') { 
             steps { 
                 sh 'chmod +x ./node_modules/.bin/jest'
-                // CAMBIO 1: Agregamos "|| true" para que si el test falla, Jenkins continúe al despliegue
+                // El "|| true" permite que el despliegue siga aunque los tests fallen
                 sh 'npm test -- --ci --runInBand || true'
             } 
         }
 
         stage('Construir Imagen Docker') {
-            when {
-                // CAMBIO 2: Permitimos que construya incluso si el resultado es 'UNSTABLE' (tests fallidos con || true)
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' || currentBuild.result == 'UNSTABLE' }
-            }
             steps {
-                sh 'docker build -t hola-mundo-node:latest .'
+                // Construye la imagen usando el Dockerfile que tiene "COPY . ."
+                sh 'docker build --no-cache -t hola-mundo-node:latest .'
             }
         }
 
         stage('Ejecutar Contenedor Node.js') {
-    steps {
-        sh '''
-            docker stop hola-mundo-node || true
-            docker rm hola-mundo-node || true
-            # Usamos ${WORKSPACE} para que sea independiente de tu carpeta personal
-            docker run -d --name hola-mundo-node \
-            -p 3000:3000 \
-            -v ${WORKSPACE}/users.json:/usr/src/app/users.json \
-            hola-mundo-node:latest
-        '''
-    }
+            steps {
+                sh '''
+                    # Detiene y elimina versiones anteriores del contenedor
+                    docker stop hola-mundo-node || true
+                    docker rm hola-mundo-node || true
+                    
+                    # Ejecuta el nuevo contenedor usando el Workspace de Jenkins para los datos
+                    # Esto hace que ya no dependa de /home/daniel/PLATAFORMA_AUTONOMO/
+                    docker run -d --name hola-mundo-node \
+                    -p 3000:3000 \
+                    -v ${WORKSPACE}/users.json:/usr/src/app/users.json \
+                    hola-mundo-node:latest
+                '''
+            }
         }
     }
 }
