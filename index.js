@@ -27,8 +27,10 @@ const writeDatabase = (data) => {
 
 // --- RUTAS ---
 
+// Busca esta parte en tu index.js y cámbiala:
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    // Esto es lo que busca el test según el error que mostraste
+    res.json({ message: "Servidor en ejecucion" }); 
 });
 
 app.get('/users', (req, res) => {
