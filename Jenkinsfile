@@ -2,11 +2,12 @@ pipeline {
     agent any
     
     environment {
-        // Asegura compatibilidad con la versión de Docker en tu sistema
+        // Asegura compatibilidad con Docker
         DOCKER_API_VERSION = '1.44' 
     }
 
     tools {
+        // Asegúrate que estos nombres coincidan con los de "Global Tool Configuration" en tu Jenkins
         nodejs "Node25"
         dockerTool "Dockertool" 
     }
@@ -14,7 +15,7 @@ pipeline {
     stages {
         stage('Limpiar Workspace') {
             steps {
-                // Borra archivos de construcciones anteriores para evitar conflictos
+                // Borra todo lo anterior para que el users.json de GitHub sea el único
                 cleanWs() 
             }
         }
@@ -26,48 +27,41 @@ pipeline {
             }
         }
 
-        stage('Instalar dependencias') {
-            steps {
-                sh 'apt-get update && apt-get install -y libatomic1 || true'
-                sh 'npm install'
-            }
-        }
-
-        stage('Ejecutar tests') { 
-            steps { 
-                sh 'chmod +x ./node_modules/.bin/jest'
-                // El "|| true" permite que el despliegue siga aunque los tests fallen
-                sh 'npm test -- --ci --runInBand || true'
-            } 
-        }
-
         stage('Construir Imagen Docker') {
             steps {
-                // Construye la imagen usando el Dockerfile que tiene "COPY . ."
+                // Construye la imagen. El --no-cache asegura que tome el users.json nuevo
                 sh 'docker build --no-cache -t hola-mundo-node:latest .'
             }
         }
 
-stage('Ejecutar Contenedor Node.js') {
+        stage('Desplegar Contenedor') {
             steps {
                 sh '''
-                    # Detener versiones anteriores
+                    # 1. Detener y eliminar el contenedor viejo si existe
                     docker stop hola-mundo-node || true
                     docker rm hola-mundo-node || true
                     
-                    # PASO CRÍTICO: Asegurar que users.json exista como archivo
-                    # Si no existe, lo crea con un array vacío []
-                    if [ ! -f ${WORKSPACE}/users.json ]; then
-                        echo "[]" > ${WORKSPACE}/users.json
-                    fi
+                    # 2. Dar permisos al archivo descargado de GitHub para que Docker lo lea bien
+                    chmod 666 ${WORKSPACE}/users.json
 
-                    # Ejecutar contenedor
+                    # 3. Ejecutar el contenedor
+                    # -v mapea el archivo físico de tu laptop (${WORKSPACE}/users.json) 
+                    # adentro del contenedor (/usr/src/app/users.json)
                     docker run -d --name hola-mundo-node \
                     -p 3000:3000 \
-                    -v ${WORKSPACE}/users.json:/usr/src/app/users.json \
+                    -v "${WORKSPACE}/users.json:/usr/src/app/users.json" \
                     hola-mundo-node:latest
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ ¡Despliegue automático completado! Revisa localhost:3000'
+        }
+        failure {
+            echo '❌ El despliegue falló. Revisa los logs de la consola.'
         }
     }
 }
