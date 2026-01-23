@@ -34,24 +34,21 @@ pipeline {
         }
 
         stage('Desplegar Contenedor') {
-            steps {
-                sh '''
-                    # Detener versiones anteriores
-                    docker stop hola-mundo-node || true
-                    docker rm hola-mundo-node || true
-                    
-                    # Permisos para el json
-                    chmod 666 ${WORKSPACE}/users.json || true
-
-                    # Ejecutar con volumen
-                    docker run -d --name hola-mundo-node \
-                    -p 3000:3000 \
-                    -v "${WORKSPACE}/users.json:/usr/src/app/users.json" \
-                    hola-mundo-node:latest
-                '''
+                    steps {
+                        sh '''
+                            # 1. Limpiar versiones anteriores
+                            docker stop hola-mundo-node || true
+                            docker rm hola-mundo-node || true
+                            
+                            # 2. En lugar de montar el archivo solo, montamos la carpeta actual (.)
+                            # Esto asegura que el contenedor vea el archivo users.json correctamente.
+                            docker run -d --name hola-mundo-node \
+                            -p 3000:3000 \
+                            -v "$(pwd)/users.json:/usr/src/app/users.json" \
+                            hola-mundo-node:latest
+                        '''
             }
         }
-    }
 
     post {
         success {
