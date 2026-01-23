@@ -5,7 +5,10 @@ pipeline {
         DOCKER_API_VERSION = '1.44' 
     }
 
-    // QUITAMOS la sección "tools" de Nodejs porque usaremos Docker directamente
+    tools {
+        // Usamos solo la herramienta de Docker que configuraste en Jenkins
+        dockerTool "Dockertool" 
+    }
 
     stages {
         stage('Limpiar Workspace') {
@@ -16,27 +19,31 @@ pipeline {
 
         stage('Descargar Código') {
             steps {
+                // Descarga el código y el users.json
                 git branch: 'main', url: 'https://github.com/josue2403/ISPA.git'
             }
         }
 
         stage('Construir Imagen Docker') {
             steps {
-                // Docker se encarga de todo, no necesita el Node de Jenkins
-                sh 'docker build --no-cache -t hola-mundo-node:latest .'
+                script {
+                    // Usamos docker.withTool para asegurar que encuentre el ejecutable
+                    sh 'docker build --no-cache -t hola-mundo-node:latest .'
+                }
             }
         }
 
         stage('Desplegar Contenedor') {
             steps {
                 sh '''
+                    # Detener versiones anteriores
                     docker stop hola-mundo-node || true
                     docker rm hola-mundo-node || true
                     
-                    # Si estás en Windows/Docker Desktop, chmod puede fallar, 
-                    # lo ponemos con "|| true" para que no detenga el proceso.
+                    # Permisos para el json
                     chmod 666 ${WORKSPACE}/users.json || true
 
+                    # Ejecutar con volumen
                     docker run -d --name hola-mundo-node \
                     -p 3000:3000 \
                     -v "${WORKSPACE}/users.json:/usr/src/app/users.json" \
@@ -48,10 +55,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ ¡Despliegue automático completado!'
+            echo '✅ ¡LOGRADO! El despliegue automático está funcionando.'
         }
         failure {
-            echo '❌ El despliegue falló. Revisa la conexión o Docker.'
+            echo '❌ Sigue faltando algo en la configuración de Docker en Jenkins.'
         }
     }
 }
