@@ -2,60 +2,64 @@ pipeline {
     agent any
     
     environment {
+        // Asegura compatibilidad con el motor de Docker
         DOCKER_API_VERSION = '1.44' 
     }
 
     tools {
-        // Usamos solo la herramienta de Docker que configuraste en Jenkins
+        // Nombre de la herramienta Docker configurada en Jenkins
         dockerTool "Dockertool" 
     }
 
     stages {
         stage('Limpiar Workspace') {
             steps {
+                // Borra archivos de builds previos para que el users.json de GitHub sea el nuevo
                 cleanWs() 
             }
         }
 
         stage('Descargar Código') {
             steps {
-                // Descarga el código y el users.json
+                // Baja el código actualizado de tu repo
                 git branch: 'main', url: 'https://github.com/josue2403/ISPA.git'
             }
         }
 
         stage('Construir Imagen Docker') {
             steps {
-                script {
-                    // Usamos docker.withTool para asegurar que encuentre el ejecutable
-                    sh 'docker build --no-cache -t hola-mundo-node:latest .'
-                }
+                // Construye la imagen ignorando el cache para incluir cambios en el JSON
+                sh 'docker build --no-cache -t hola-mundo-node:latest .'
             }
         }
 
         stage('Desplegar Contenedor') {
-                    steps {
-                        sh '''
-                            # 1. Limpiar versiones anteriores
-                            docker stop hola-mundo-node || true
-                            docker rm hola-mundo-node || true
-                            
-                            # 2. En lugar de montar el archivo solo, montamos la carpeta actual (.)
-                            # Esto asegura que el contenedor vea el archivo users.json correctamente.
-                            docker run -d --name hola-mundo-node \
-                            -p 3000:3000 \
-                            -v "$(pwd)/users.json:/usr/src/app/users.json" \
-                            hola-mundo-node:latest
-                        '''
+            steps {
+                sh '''
+                    # 1. Detener y limpiar contenedores previos
+                    docker stop hola-mundo-node || true
+                    docker rm hola-mundo-node || true
+                    
+                    # 2. Asegurar permisos de lectura para el archivo users.json
+                    chmod 666 ${WORKSPACE}/users.json || true
+
+                    # 3. Ejecutar el contenedor usando la ruta absoluta del workspace
+                    # Esto evita el error de "not a directory" que salió antes
+                    docker run -d --name hola-mundo-node \
+                    -p 3000:3000 \
+                    -v "${WORKSPACE}/users.json:/usr/src/app/users.json" \
+                    hola-mundo-node:latest
+                '''
             }
         }
+    }
 
     post {
         success {
-            echo '✅ ¡LOGRADO! El despliegue automático está funcionando.'
+            echo '✅ ¡DESPLIEGUE EXITOSO! El cambio en GitHub ya está en tu laptop.'
         }
         failure {
-            echo '❌ Sigue faltando algo en la configuración de Docker en Jenkins.'
+            echo '❌ Error en el pipeline. Revisa los logs arriba.'
         }
     }
 }
